@@ -21,7 +21,8 @@
 
   const DEFAULT = { lat: 16.8661, lng: 96.1951, z: 12 };
   const NOMINATIM = "https://nominatim.openstreetmap.org/search";
-  const ROOM_ID_PATTERN = /^[a-z0-9]{4,12}$/i;
+  /** Everyone joins this room; URL is normalized to include ?room=… */
+  const FIXED_ROOM_ID = "thingyan2026";
   const FIREBASE_WRITE_MS = 900;
 
   const mapEl = document.getElementById("map");
@@ -46,22 +47,6 @@
     );
   }
 
-  function generateRoomId() {
-    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-    let s = "";
-    for (let i = 0; i < 6; i++) {
-      s += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return s;
-  }
-
-  function sanitizeRoomId(raw) {
-    if (raw == null) return null;
-    const s = String(raw).trim().toLowerCase();
-    if (!ROOM_ID_PATTERN.test(s)) return null;
-    return s;
-  }
-
   function generateUserId() {
     try {
       if (crypto.randomUUID) return crypto.randomUUID();
@@ -73,14 +58,12 @@
 
   function parseUrl() {
     const p = new URLSearchParams(window.location.search);
-    let room = sanitizeRoomId(p.get("room"));
     const lat = parseFloat(p.get("lat"));
     const lng = parseFloat(p.get("lng"));
     const z = parseInt(p.get("z"), 10);
     const mlat = parseFloat(p.get("mlat"));
     const mlng = parseFloat(p.get("mlng"));
     return {
-      room,
       lat: Number.isFinite(lat) ? lat : DEFAULT.lat,
       lng: Number.isFinite(lng) ? lng : DEFAULT.lng,
       z: Number.isFinite(z) && z >= 1 && z <= 19 ? z : DEFAULT.z,
@@ -168,17 +151,17 @@
   }
 
   const initial = parseUrl();
-  let roomId = initial.room;
-  if (!roomId) {
-    roomId = generateRoomId();
-    const u = new URL(window.location.href);
-    u.searchParams.set("room", roomId);
-    window.history.replaceState({}, "", u.toString());
+  const roomId = FIXED_ROOM_ID;
+  let currentRoomId = roomId;
+
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("room") !== FIXED_ROOM_ID) {
+    url.searchParams.set("room", FIXED_ROOM_ID);
+    window.history.replaceState({}, "", url.toString());
   }
 
   const myUid = generateUserId();
   const myDisplayName = promptForDisplayName();
-  let currentRoomId = roomId;
 
   const map = L.map(mapEl, { zoomControl: true }).setView(
     [initial.lat, initial.lng],
