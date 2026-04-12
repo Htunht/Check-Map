@@ -35,6 +35,14 @@
   const distanceWaitingEl = document.getElementById("distance-info-waiting");
   const distanceActiveEl = document.getElementById("distance-info-active");
   const distanceListEl = document.getElementById("distance-list");
+  const inAppWarning = document.getElementById("in-app-warning");
+
+  function isLikelyEmbeddedBrowser() {
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+    return /FBAN|FBAV|Instagram|Line\/|LinkedInApp|Twitter|Snapchat|TikTok|wv\)|; wv\)| KAKAOTALK|NAVER/i.test(
+      ua,
+    );
+  }
 
   function isFirebaseConfigured() {
     const k = firebaseConfig && firebaseConfig.apiKey;
@@ -168,6 +176,8 @@
         return;
       }
 
+      let finished = false;
+
       function invalidateAfterOverlay() {
         requestAnimationFrame(() => {
           if (map) {
@@ -182,8 +192,10 @@
       }
 
       function cleanup() {
-        submit.removeEventListener("click", onSubmit);
-        skip.removeEventListener("click", onSkip);
+        submit.removeEventListener("pointerup", onSubmitPointer);
+        skip.removeEventListener("pointerup", onSkipPointer);
+        submit.removeEventListener("click", onSubmitClick);
+        skip.removeEventListener("click", onSkipClick);
         input.removeEventListener("keydown", onKey);
         modal.classList.add("hidden");
         modal.classList.remove("flex");
@@ -192,6 +204,10 @@
       }
 
       function finish(raw) {
+        if (finished) {
+          return;
+        }
+        finished = true;
         cleanup();
         resolve(sanitizeDisplayName(raw));
       }
@@ -209,6 +225,28 @@
         finish("");
       }
 
+      function onSubmitPointer(e) {
+        if (e.pointerType === "mouse" && e.button !== 0) {
+          return;
+        }
+        onSubmit();
+      }
+
+      function onSkipPointer(e) {
+        if (e.pointerType === "mouse" && e.button !== 0) {
+          return;
+        }
+        onSkip();
+      }
+
+      function onSubmitClick() {
+        onSubmit();
+      }
+
+      function onSkipClick() {
+        onSkip();
+      }
+
       function onKey(e) {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -220,8 +258,10 @@
       document.body.style.overflow = "hidden";
       modal.classList.remove("hidden");
       modal.classList.add("flex");
-      submit.addEventListener("click", onSubmit);
-      skip.addEventListener("click", onSkip);
+      submit.addEventListener("pointerup", onSubmitPointer);
+      skip.addEventListener("pointerup", onSkipPointer);
+      submit.addEventListener("click", onSubmitClick);
+      skip.addEventListener("click", onSkipClick);
       input.addEventListener("keydown", onKey);
       setTimeout(() => {
         input.focus();
@@ -274,6 +314,21 @@
   if (url.searchParams.get("room") !== FIXED_ROOM_ID) {
     url.searchParams.set("room", FIXED_ROOM_ID);
     window.history.replaceState({}, "", url.toString());
+  }
+
+  if (inAppWarning && isLikelyEmbeddedBrowser()) {
+    inAppWarning.classList.remove("hidden");
+  }
+
+  if (!mapEl) {
+    showToast("Page error: map container missing.");
+    throw new Error("NO_MAP_EL");
+  }
+  if (typeof L === "undefined" || typeof L.map !== "function") {
+    showToast(
+      "Map did not load. Try full Safari/Chrome, disable blockers, or use Wi‑Fi.",
+    );
+    throw new Error("NO_LEAFLET");
   }
 
   const myUid = generateUserId();
@@ -790,8 +845,17 @@
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", scheduleMapInvalidate);
   }
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) {
+      scheduleMapInvalidate();
+    }
+  });
 })().catch(function (err) {
   try {
+    const msg = err && err.message ? String(err.message) : "";
+    if (msg === "NO_LEAFLET" || msg === "NO_MAP_EL") {
+      return;
+    }
     if (typeof console !== "undefined" && console.error) {
       console.error("[Check Map] startup", err);
     }
