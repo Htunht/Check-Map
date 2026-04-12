@@ -49,11 +49,51 @@
 
   function generateUserId() {
     try {
-      if (crypto.randomUUID) return crypto.randomUUID();
+      const c = globalThis.crypto;
+      if (c && typeof c.randomUUID === "function") {
+        return c.randomUUID();
+      }
     } catch (_) {
       /* ignore */
     }
     return "u_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+
+  /** Coarse pointer / touch → easier GPS fixes on many phones (especially indoors). */
+  function prefersCoarsePointer() {
+    if (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0) {
+      return true;
+    }
+    if (typeof window.matchMedia === "function") {
+      return window.matchMedia("(pointer: coarse)").matches;
+    }
+    return false;
+  }
+
+  function geolocationOptions() {
+    if (prefersCoarsePointer()) {
+      return {
+        enableHighAccuracy: false,
+        maximumAge: 15000,
+        timeout: 30000,
+      };
+    }
+    return {
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 15000,
+    };
+  }
+
+  function firebaseWriteErrorMessage(err) {
+    const code = err && err.code ? String(err.code) : "";
+    if (code === "PERMISSION_DENIED") {
+      return "Firebase denied access. In Firebase Console: set Realtime Database rules for rooms/…/users, and add this site URL under Authentication → Settings → Authorized domains.";
+    }
+    if (code === "UNAVAILABLE" || code === "NETWORK_ERROR") {
+      return "Network issue talking to Firebase. Check Wi‑Fi/cellular or try again.";
+    }
+    return (err && err.message) || code || "Could not sync to Firebase.";
   }
 
   function parseUrl() {
@@ -245,7 +285,7 @@
     touchZoom: true,
     dragging: true,
     doubleClickZoom: true,
-    keyboard: !L.Browser.mobile,
+    keyboard: !(L.Browser && L.Browser.mobile),
   }).setView([initial.lat, initial.lng], initial.z);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -399,10 +439,21 @@
       return;
     }
 
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+    } catch (e) {
+      showToast("Firebase failed to start: " + (e && e.message ? e.message : e));
+      return;
     }
+
     db = firebase.database();
+    try {
+      db.goOnline();
+    } catch (_) {
+      /* ignore */
+    }
 
     usersRef = db.ref("rooms/" + room + "/users");
     userRef = usersRef.child(myUid);
@@ -462,7 +513,18 @@
       onRelativeGeometryChanged();
     };
 
-    usersRef.on("value", onUsers);
+    const onUsersError = (err) => {
+      if (typeof console !== "undefined" && console.error) {
+        console.error("[Check Map] Firebase listeners", err);
+      }
+      if (roomStatusEl) {
+        roomStatusEl.textContent =
+          "Room: " + currentRoomId + " | Sync error — see message below";
+      }
+      showToast(firebaseWriteErrorMessage(err));
+    };
+
+    usersRef.on("value", onUsers, onUsersError);
     usersListenerUnsub = function () {
       usersRef.off("value", onUsers);
     };
@@ -495,8 +557,15 @@
     };
     lastFirebaseWrite = Date.now();
     const p = userRef.set(payload);
-    if (force && p && typeof p.catch === "function") {
-      p.catch(() => showToast("Could not write to Firebase"));
+    if (p && typeof p.catch === "function") {
+      p.catch((err) => {
+        if (typeof console !== "undefined" && console.error) {
+          console.error("[Check Map] Firebase write", err);
+        }
+        if (force || (err && err.code === "PERMISSION_DENIED")) {
+          showToast(firebaseWriteErrorMessage(err));
+        }
+      });
     }
   }
 
@@ -559,6 +628,10 @@
       showToast("Geolocation is not supported");
       return;
     }
+    if (typeof window.isSecureContext === "boolean" && !window.isSecureContext) {
+      showToast("Location needs HTTPS. Open this app using https:// (not http://).");
+      return;
+    }
     btnLocate.disabled = true;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -572,16 +645,25 @@
         btnLocate.disabled = false;
         showToast("Map centered on you");
       },
-      () => {
+      (geoErr) => {
         btnLocate.disabled = false;
-        showToast("Could not get your location");
+        const code = geoErr && geoErr.code;
+        if (code === 1) {
+          showToast("Location blocked. On your phone: allow location for this site in browser settings.");
+        } else {
+          showToast("Could not get your location. Try outdoors or tap again.");
+        }
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      geolocationOptions(),
     );
   });
 
   function startWatchPosition() {
     if (!navigator.geolocation) return;
+    if (typeof window.isSecureContext === "boolean" && !window.isSecureContext) {
+      showToast("Live GPS needs HTTPS. Use your Vercel https:// link on your phone.");
+      return;
+    }
     if (watchId != null) return;
     watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -592,10 +674,12 @@
           scheduleFirebaseWrite();
         }
       },
-      () => {
-        /* silent: permission or errors; Locate still available */
+      (err) => {
+        if (typeof console !== "undefined" && console.warn) {
+          console.warn("[Check Map] watchPosition", err && err.message ? err.message : err);
+        }
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+      geolocationOptions(),
     );
   }
 
@@ -706,4 +790,18 @@
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", scheduleMapInvalidate);
   }
-})();
+})().catch(function (err) {
+  try {
+    if (typeof console !== "undefined" && console.error) {
+      console.error("[Check Map] startup", err);
+    }
+    var el = document.getElementById("toast");
+    if (el) {
+      el.textContent =
+        "Could not start the app. Use Safari/Chrome (not an in-app browser) and open the https:// link.";
+      el.classList.remove("hidden");
+    }
+  } catch (_) {
+    /* ignore */
+  }
+});
