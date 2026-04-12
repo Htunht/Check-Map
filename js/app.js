@@ -1,4 +1,4 @@
-(function () {
+(async function () {
   "use strict";
 
   /**
@@ -113,9 +113,85 @@
     return s.length > 40 ? s.slice(0, 40) : s;
   }
 
-  function promptForDisplayName() {
-    const input = window.prompt("Enter your name for this room:", "");
-    return sanitizeDisplayName(input);
+  /**
+   * Touch-friendly name step (replaces window.prompt on phones).
+   * Name is saved with lat/lng via flushMyPositionToFirebase.
+   */
+  function openJoinNameModal() {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("join-modal");
+      const input = document.getElementById("join-name-input");
+      const submit = document.getElementById("join-name-submit");
+      const skip = document.getElementById("join-name-skip");
+      if (!modal || !input || !submit || !skip) {
+        resolve(sanitizeDisplayName(""));
+        return;
+      }
+
+      function invalidateAfterOverlay() {
+        requestAnimationFrame(() => {
+          if (map) {
+            map.invalidateSize({ animate: false });
+          }
+        });
+        setTimeout(() => {
+          if (map) {
+            map.invalidateSize({ animate: false });
+          }
+        }, 280);
+      }
+
+      function cleanup() {
+        submit.removeEventListener("click", onSubmit);
+        skip.removeEventListener("click", onSkip);
+        input.removeEventListener("keydown", onKey);
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        document.body.style.overflow = "";
+        invalidateAfterOverlay();
+      }
+
+      function finish(raw) {
+        cleanup();
+        resolve(sanitizeDisplayName(raw));
+      }
+
+      function onSubmit() {
+        const t = String(input.value).trim();
+        if (t.length === 0) {
+          input.focus();
+          return;
+        }
+        finish(t);
+      }
+
+      function onSkip() {
+        finish("");
+      }
+
+      function onKey(e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onSubmit();
+        }
+      }
+
+      input.value = "";
+      document.body.style.overflow = "hidden";
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      submit.addEventListener("click", onSubmit);
+      skip.addEventListener("click", onSkip);
+      input.addEventListener("keydown", onKey);
+      setTimeout(() => {
+        input.focus();
+        try {
+          input.scrollIntoView({ block: "center", behavior: "smooth" });
+        } catch (_) {
+          /* ignore */
+        }
+      }, 200);
+    });
   }
 
   /** Geodesic distance in meters (Leaflet uses haversine). */
@@ -161,12 +237,16 @@
   }
 
   const myUid = generateUserId();
-  const myDisplayName = promptForDisplayName();
+  let myDisplayName;
 
-  const map = L.map(mapEl, { zoomControl: true }).setView(
-    [initial.lat, initial.lng],
-    initial.z,
-  );
+  const map = L.map(mapEl, {
+    zoomControl: true,
+    tap: true,
+    touchZoom: true,
+    dragging: true,
+    doubleClickZoom: true,
+    keyboard: !L.Browser.mobile,
+  }).setView([initial.lat, initial.lng], initial.z);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution:
@@ -179,13 +259,15 @@
     draggable: true,
     autoPan: true,
   }).addTo(map);
-  setMarkerNameTooltip(myMarker, myDisplayName + " (you)");
 
   if (initial.marker) {
     myMarker.setLatLng([initial.marker.lat, initial.marker.lng]);
   } else if (!window.location.search.includes("mlat")) {
     myMarker.setLatLng(map.getCenter());
   }
+
+  myDisplayName = await openJoinNameModal();
+  setMarkerNameTooltip(myMarker, myDisplayName + " (you)");
 
   const otherMarkers = new Map();
   const otherPolylines = new Map();
@@ -608,5 +690,20 @@
 
   if (!isFirebaseConfigured()) {
     showToast("Add your Firebase config in js/app.js to enable live sync");
+  }
+
+  let mapInvalidateTimer;
+  function scheduleMapInvalidate() {
+    clearTimeout(mapInvalidateTimer);
+    mapInvalidateTimer = setTimeout(() => {
+      map.invalidateSize({ animate: false });
+    }, 120);
+  }
+  window.addEventListener("resize", scheduleMapInvalidate);
+  window.addEventListener("orientationchange", () => {
+    setTimeout(() => map.invalidateSize({ animate: false }), 350);
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", scheduleMapInvalidate);
   }
 })();

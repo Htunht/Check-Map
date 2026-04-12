@@ -2,7 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <title>Check Map</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -32,8 +42,20 @@
       crossorigin=""
     />
     <style>
+      html {
+        height: 100%;
+        height: 100dvh;
+      }
+      body {
+        min-height: 100%;
+        min-height: 100dvh;
+        min-height: -webkit-fill-available;
+        padding-left: env(safe-area-inset-left, 0);
+        padding-right: env(safe-area-inset-right, 0);
+      }
       .leaflet-container {
         font-family: inherit;
+        -webkit-tap-highlight-color: transparent;
       }
       .location-pin-marker {
         background: transparent !important;
@@ -54,8 +76,8 @@
       }
       .distance-info-widget {
         position: fixed;
-        bottom: 24px;
-        right: 24px;
+        bottom: max(1.25rem, env(safe-area-inset-bottom, 0px) + 0.5rem);
+        right: max(1.25rem, env(safe-area-inset-right, 0px) + 0.5rem);
         z-index: 1000;
         min-width: 180px;
         max-width: min(20rem, calc(100vw - 48px));
@@ -68,13 +90,19 @@
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
         pointer-events: none;
       }
+      #join-modal {
+        padding: max(1rem, env(safe-area-inset-top))
+          max(1rem, env(safe-area-inset-right))
+          max(1rem, env(safe-area-inset-bottom))
+          max(1rem, env(safe-area-inset-left));
+      }
     </style>
   </head>
   <body
     class="flex min-h-screen flex-col bg-slate-950 font-sans text-slate-100 antialiased"
   >
     <header
-      class="sticky top-0 z-[1000] flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-800/80 bg-ink-950/95 px-4 py-3 backdrop-blur-md"
+      class="sticky top-0 z-[1000] flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-800/80 bg-ink-950/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-md"
     >
       <div
         class="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-4"
@@ -93,7 +121,7 @@
         class="order-3 w-full basis-full text-center text-xs font-medium text-teal-400/95 sm:order-none sm:w-auto sm:basis-auto sm:text-left"
         aria-live="polite"
       >
-        Room: …
+        Room:
       </div>
 
       <div
@@ -105,7 +133,7 @@
             type="search"
             placeholder="Search place…"
             autocomplete="off"
-            class="w-full rounded-lg border border-slate-700 bg-slate-900/80 py-2 pl-9 pr-3 text-sm text-white placeholder:text-slate-500 outline-none ring-teal-500/40 focus:border-teal-500 focus:ring-2"
+            class="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900/80 py-2.5 pl-9 pr-3 text-base text-white placeholder:text-slate-500 outline-none ring-teal-500/40 focus:border-teal-500 focus:ring-2"
           />
           <svg
             class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
@@ -132,7 +160,7 @@
           <button
             id="btn-locate"
             type="button"
-            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-700"
+            class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-700 active:bg-slate-600"
             title="Center map on my position"
           >
             <svg
@@ -159,7 +187,7 @@
           <button
             id="btn-copy"
             type="button"
-            class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-900/30 transition hover:bg-teal-500 sm:flex-initial"
+            class="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-900/30 transition hover:bg-teal-500 active:bg-teal-700 sm:flex-initial"
           >
             <svg
               class="h-4 w-4"
@@ -188,14 +216,67 @@
 
     <div
       id="toast"
-      class="pointer-events-none fixed bottom-6 left-1/2 z-[2000] hidden -translate-x-1/2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white shadow-lg ring-1 ring-slate-600"
+      class="pointer-events-none fixed left-1/2 z-[2000] hidden max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg bg-slate-800 px-4 py-2 text-center text-sm font-medium text-white shadow-lg ring-1 ring-slate-600"
+      style="bottom: max(1.5rem, env(safe-area-inset-bottom, 0px) + 0.5rem)"
     ></div>
 
-    <aside
-      id="distance-info"
-      class="distance-info-widget"
-      aria-live="polite"
+    <div
+      id="join-modal"
+      class="fixed inset-0 z-[3000] hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="join-modal-title"
     >
+      <div
+        class="mx-4 w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl ring-1 ring-slate-800"
+      >
+        <h2
+          id="join-modal-title"
+          class="text-lg font-semibold tracking-tight text-white"
+        >
+          Join Check Map
+        </h2>
+        <p class="mt-1 text-sm text-slate-400">
+          Your name appears on the map for others in this room.
+        </p>
+        <label
+          class="mt-4 block text-xs font-medium text-slate-400"
+          for="join-name-input"
+          >Display name</label
+        >
+        <input
+          id="join-name-input"
+          type="text"
+          maxlength="40"
+          enterkeyhint="done"
+          autocapitalize="words"
+          autocomplete="name"
+          inputmode="text"
+          class="mt-1.5 w-full rounded-lg border border-slate-600 bg-slate-950 px-3 py-3 text-base text-white outline-none ring-teal-500/30 focus:border-teal-500 focus:ring-2"
+          placeholder="e.g. Aung"
+        />
+        <div
+          class="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:justify-end"
+        >
+          <button
+            id="join-name-submit"
+            type="button"
+            class="min-h-12 w-full rounded-lg bg-teal-600 py-3 text-sm font-semibold text-white shadow-lg active:bg-teal-700 sm:w-auto sm:px-6"
+          >
+            Continue
+          </button>
+          <button
+            id="join-name-skip"
+            type="button"
+            class="min-h-12 w-full rounded-lg border border-slate-600 py-3 text-sm font-medium text-slate-300 active:bg-slate-800 sm:w-auto sm:px-4"
+          >
+            Skip (Guest)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <aside id="distance-info" class="distance-info-widget" aria-live="polite">
       <div
         id="distance-info-waiting"
         class="hidden text-sm font-medium leading-snug text-slate-400"
