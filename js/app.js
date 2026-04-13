@@ -1,3 +1,5 @@
+window.roomId = "thingyan2026";
+
 (async function () {
   "use strict";
 
@@ -22,7 +24,7 @@
   const DEFAULT = { lat: 16.8661, lng: 96.1951, z: 12 };
   const NOMINATIM = "https://nominatim.openstreetmap.org/search";
   /** Everyone joins this room; URL is normalized to include ?room=… */
-  const FIXED_ROOM_ID = "thingyan2026";
+  const FIXED_ROOM_ID = window.roomId;
   const FIREBASE_WRITE_MS = 900;
 
   const mapEl = document.getElementById("map");
@@ -307,8 +309,7 @@
   }
 
   const initial = parseUrl();
-  const roomId = FIXED_ROOM_ID;
-  let currentRoomId = roomId;
+  let currentRoomId = FIXED_ROOM_ID;
 
   const url = new URL(window.location.href);
   if (url.searchParams.get("room") !== FIXED_ROOM_ID) {
@@ -822,7 +823,7 @@
     searchResults.classList.remove("hidden");
   }
 
-  bindRoom(roomId);
+  bindRoom(window.roomId);
   pushHistoryFromMap();
   startWatchPosition();
   onRelativeGeometryChanged();
