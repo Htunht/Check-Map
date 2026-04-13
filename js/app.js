@@ -40,7 +40,8 @@ window.roomId = "thingyan2026";
   const inAppWarning = document.getElementById("in-app-warning");
 
   function isLikelyEmbeddedBrowser() {
-    const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+    const ua =
+      typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
     return /FBAN|FBAV|Instagram|Line\/|LinkedInApp|Twitter|Snapchat|TikTok|wv\)|; wv\)| KAKAOTALK|NAVER/i.test(
       ua,
     );
@@ -500,7 +501,9 @@ window.roomId = "thingyan2026";
         firebase.initializeApp(firebaseConfig);
       }
     } catch (e) {
-      showToast("Firebase failed to start: " + (e && e.message ? e.message : e));
+      showToast(
+        "Firebase failed to start: " + (e && e.message ? e.message : e),
+      );
       return;
     }
 
@@ -684,8 +687,13 @@ window.roomId = "thingyan2026";
       showToast("Geolocation is not supported");
       return;
     }
-    if (typeof window.isSecureContext === "boolean" && !window.isSecureContext) {
-      showToast("Location needs HTTPS. Open this app using https:// (not http://).");
+    if (
+      typeof window.isSecureContext === "boolean" &&
+      !window.isSecureContext
+    ) {
+      showToast(
+        "Location needs HTTPS. Open this app using https:// (not http://).",
+      );
       return;
     }
     btnLocate.disabled = true;
@@ -705,7 +713,9 @@ window.roomId = "thingyan2026";
         btnLocate.disabled = false;
         const code = geoErr && geoErr.code;
         if (code === 1) {
-          showToast("Location blocked. On your phone: allow location for this site in browser settings.");
+          showToast(
+            "Location blocked. On your phone: allow location for this site in browser settings.",
+          );
         } else {
           showToast("Could not get your location. Try outdoors or tap again.");
         }
@@ -716,8 +726,13 @@ window.roomId = "thingyan2026";
 
   function startWatchPosition() {
     if (!navigator.geolocation) return;
-    if (typeof window.isSecureContext === "boolean" && !window.isSecureContext) {
-      showToast("Live GPS needs HTTPS. Use your Vercel https:// link on your phone.");
+    if (
+      typeof window.isSecureContext === "boolean" &&
+      !window.isSecureContext
+    ) {
+      showToast(
+        "Live GPS needs HTTPS. Use your Vercel https:// link on your phone.",
+      );
       return;
     }
     if (watchId != null) return;
@@ -732,7 +747,10 @@ window.roomId = "thingyan2026";
       },
       (err) => {
         if (typeof console !== "undefined" && console.warn) {
-          console.warn("[Check Map] watchPosition", err && err.message ? err.message : err);
+          console.warn(
+            "[Check Map] watchPosition",
+            err && err.message ? err.message : err,
+          );
         }
       },
       geolocationOptions(),
@@ -869,4 +887,12 @@ window.roomId = "thingyan2026";
   } catch (_) {
     /* ignore */
   }
+  const connectedRef = firebase.database().ref(".info/connected");
+  connectedRef.on("value", (snap) => {
+    if (snap.val() === true) {
+      console.log("🟢 Firebase Connected Successfully!");
+    } else {
+      console.warn("🔴 Firebase Disconnected!");
+    }
+  });
 });
